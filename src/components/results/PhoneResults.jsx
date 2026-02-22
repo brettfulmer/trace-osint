@@ -18,7 +18,7 @@ const LINE_TYPE_META = {
 }
 
 export default function PhoneResults({ results }) {
-  const { phone, cleaned, valid, country, countryFlag, timezone, carrier, lineType, formatted, localFormat, sources } = results
+  const { phone, cleaned, valid, country, countryFlag, timezone, carrier, lineType, formatted, localFormat, callerName, lineStatus, portedNetwork, sources } = results
   const abstractData = sources?.abstractapi?.data
 
   const lineTypeMeta = lineType ? (LINE_TYPE_META[lineType.toLowerCase()] || LINE_TYPE_META.unknown) : null
@@ -64,9 +64,12 @@ export default function PhoneResults({ results }) {
 
           {/* Details */}
           <div>
+            {callerName && <InfoRow label="Caller Name" value={callerName} highlight />}
             <InfoRow label="Country" value={country ? `${countryFlag || ''} ${country}`.trim() : null} highlight />
             <InfoRow label="Carrier / Operator" value={carrier} highlight />
             <InfoRow label="Line Type" value={lineType} />
+            {lineStatus && <InfoRow label="Line Status" value={lineStatus} />}
+            {portedNetwork && <InfoRow label="Ported Network" value={portedNetwork} />}
             <InfoRow label="Timezone" value={timezone} />
             <InfoRow label="International Format" value={formatted} />
             <InfoRow label="Local Format" value={localFormat} />

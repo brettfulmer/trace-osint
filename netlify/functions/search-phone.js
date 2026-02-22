@@ -114,17 +114,31 @@ const cleanPhone = (phone) => {
   return phone.replace(/[\s\-().]/g, '');
 };
 
-// ─── AbstractAPI Phone Validation ─────────────────────────────────────────────
+// ─── AbstractAPI Phone Intelligence ──────────────────────────────────────────
+// Endpoint: https://phoneintelligence.abstractapi.com/v1?api_key=KEY&phone=NUMBER
+// Phone must be digits only (no +, spaces, dashes) — e.g. 61488774490
 
 const checkAbstractAPI = async (phone, apiKey) => {
   if (!apiKey) return { source: 'AbstractAPI', found: null, note: 'API key not configured — get one free at abstractapi.com' };
   try {
+    // Strip everything except digits — AbstractAPI Phone Intelligence expects raw digits
+    const digitsOnly = phone.replace(/\D/g, '');
+
     const res = await fetchWithTimeout(
-      `https://phonevalidation.abstractapi.com/v1/?api_key=${apiKey}&phone=${encodeURIComponent(phone)}`
+      `https://phoneintelligence.abstractapi.com/v1?api_key=${apiKey}&phone=${digitsOnly}`
     );
-    if (!res.ok) return { source: 'AbstractAPI', found: null };
+
+    if (res.status === 422 || res.status === 400) {
+      const err = await res.json().catch(() => ({}));
+      return { source: 'AbstractAPI', found: false, note: err?.error?.message || 'Invalid phone number' };
+    }
+    if (!res.ok) return { source: 'AbstractAPI', found: null, note: `API error ${res.status}` };
+
     const d = await res.json();
-    if (!d.valid) return { source: 'AbstractAPI', found: false, data: { raw: phone } };
+
+    // The phone intelligence API may return valid=false for unrecognised numbers
+    if (d.valid === false) return { source: 'AbstractAPI', found: false, data: { raw: phone } };
+
     return {
       source: 'AbstractAPI',
       found: true,
@@ -132,12 +146,15 @@ const checkAbstractAPI = async (phone, apiKey) => {
         formatted: d.format?.international || d.phone,
         local: d.format?.local,
         valid: d.valid,
-        type: d.type,
+        type: d.type,                           // mobile / landline / voip / unknown
         country: d.country?.name,
         countryCode: d.country?.code,
         dialingCode: d.country?.phone_code ? `+${d.country.phone_code}` : null,
         carrier: d.carrier,
         location: d.location,
+        callerName: d.caller_name || null,       // Phone Intelligence extra fields
+        lineStatus: d.line_status || null,
+        portedNetwork: d.ported_network || null,
       },
     };
   } catch {
@@ -192,6 +209,9 @@ export const handler = async (event) => {
         formatted: abstractResult.data?.formatted || null,
         localFormat: abstractResult.data?.local || null,
         valid: abstractResult.data?.valid,
+        callerName: abstractResult.data?.callerName || null,
+        lineStatus: abstractResult.data?.lineStatus || null,
+        portedNetwork: abstractResult.data?.portedNetwork || null,
         sources: { abstractapi: abstractResult },
       }),
     };
